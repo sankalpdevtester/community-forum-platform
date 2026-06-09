@@ -1,34 +1,30 @@
 /**
- * In-memory cache utility with TTL for API responses.
- * 
- * This utility helps reduce the number of requests made to the API by caching responses
- * for a specified amount of time.
+ * In-memory cache utility with TTL (time to live) for API responses.
+ * This utility helps reduce the number of requests to the API by caching frequently accessed data.
  */
 
 const cache = {};
 
 /**
  * Set a value in the cache with a TTL.
- * 
- * @param {string} key - The key to set in the cache.
- * @param {any} value - The value to set in the cache.
+ * @param {string} key - The cache key.
+ * @param {any} value - The value to cache.
  * @param {number} ttl - The time to live in milliseconds.
  */
 function setCache(key, value, ttl) {
   const currentTime = new Date().getTime();
-  cache[key] = { value, expires: currentTime + ttl };
+  cache[key] = { value, expiresAt: currentTime + ttl };
 }
 
 /**
  * Get a value from the cache.
- * 
- * @param {string} key - The key to get from the cache.
- * @returns {any} The cached value or null if it doesn't exist or has expired.
+ * @param {string} key - The cache key.
+ * @returns {any} The cached value or null if not found or expired.
  */
 function getCache(key) {
   if (!cache[key]) return null;
   const currentTime = new Date().getTime();
-  if (cache[key].expires < currentTime) {
+  if (cache[key].expiresAt < currentTime) {
     delete cache[key];
     return null;
   }
@@ -43,55 +39,53 @@ function clearCache() {
 }
 
 /**
- * Check if a key exists in the cache.
- * 
- * @param {string} key - The key to check.
- * @returns {boolean} True if the key exists in the cache, false otherwise.
+ * Invalidate a cache entry by key.
+ * @param {string} key - The cache key to invalidate.
  */
-function hasCache(key) {
-  return cache[key] !== undefined;
-}
-
-/**
- * Get the expiration time of a cached value.
- * 
- * @param {string} key - The key to get the expiration time for.
- * @returns {number} The expiration time in milliseconds or null if it doesn't exist.
- */
-function getCacheExpiration(key) {
-  if (!cache[key]) return null;
-  return cache[key].expires;
+function invalidateCache(key) {
+  delete cache[key];
 }
 
 // Example usage:
-// Set a value in the cache with a TTL of 1 minute
-// setCache('apiResponse', { data: 'example data' }, 60000);
+// Set a cache entry with a TTL of 1 minute
+// setCache('api/posts', [{ id: 1, title: 'Post 1' }], 60000);
 
-// Get a value from the cache
-// const cachedValue = getCache('apiResponse');
+// Get a cache entry
+// const cachedPosts = getCache('api/posts');
 
-// Clear the cache
+// Clear the entire cache
 // clearCache();
 
-// Check if a key exists in the cache
-// const hasKey = hasCache('apiResponse');
-
-// Get the expiration time of a cached value
-// const expirationTime = getCacheExpiration('apiResponse');
+// Invalidate a specific cache entry
+// invalidateCache('api/posts');
 
 // Export the cache utility functions
-export { setCache, getCache, clearCache, hasCache, getCacheExpiration };
+export { setCache, getCache, clearCache, invalidateCache };
 
 // Integrate with existing files
 // In src/pages/api/auth.js, use the cache utility to cache API responses
 // import { setCache, getCache } from '../utils/cache';
 // ...
-// const cachedResponse = getCache('apiResponse');
-// if (cachedResponse) {
-//   return cachedResponse;
-// } else {
-//   const response = await fetch('https://example.com/api/data');
-//   const data = await response.json();
-//   setCache('apiResponse', data, 60000);
-//   return data;
-// }
+// const cachedResponse = getCache('api/auth');
+// if (cachedResponse) return cachedResponse;
+// const response = await fetch('https://example.com/api/auth');
+// setCache('api/auth', response, 30000);
+// return response;
+
+// In src/features/Post.js, use the cache utility to cache post data
+// import { getCache, setCache } from '../utils/cache';
+// ...
+// const cachedPosts = getCache('api/posts');
+// if (cachedPosts) return cachedPosts;
+// const response = await fetch('https://example.com/api/posts');
+// setCache('api/posts', response, 60000);
+// return response;
+
+// In src/models/User.js, use the cache utility to cache user data
+// import { getCache, setCache } from '../utils/cache';
+// ...
+// const cachedUser = getCache(`api/users/${userId}`);
+// if (cachedUser) return cachedUser;
+// const response = await fetch(`https://example.com/api/users/${userId}`);
+// setCache(`api/users/${userId}`, response, 30000);
+// return response;
