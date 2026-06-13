@@ -1,9 +1,9 @@
 /**
  * In-memory cache utility with TTL (time to live) for API responses.
- * This module provides a simple caching mechanism to reduce the number of API requests.
+ * This utility helps reduce the number of requests made to the API by caching frequently accessed data.
  */
 
-const cache = new Map();
+const cache = {};
 
 /**
  * Set a value in the cache with a TTL.
@@ -12,8 +12,8 @@ const cache = new Map();
  * @param {number} ttl - The time to live in milliseconds.
  */
 function setCache(key, value, ttl) {
-  const expiration = Date.now() + ttl;
-  cache.set(key, { value, expiration });
+  const currentTime = Date.now();
+  cache[key] = { value, expiresAt: currentTime + ttl };
 }
 
 /**
@@ -22,66 +22,76 @@ function setCache(key, value, ttl) {
  * @returns {any} The cached value or null if not found or expired.
  */
 function getCache(key) {
-  const cached = cache.get(key);
-  if (!cached) return null;
-  if (cached.expiration < Date.now()) {
-    cache.delete(key);
+  const cachedValue = cache[key];
+  if (!cachedValue) return null;
+  const currentTime = Date.now();
+  if (currentTime > cachedValue.expiresAt) {
+    delete cache[key];
     return null;
   }
-  return cached.value;
+  return cachedValue.value;
 }
 
 /**
  * Clear the cache.
  */
 function clearCache() {
-  cache.clear();
+  cache = {};
 }
 
 /**
- * Check if a key is cached.
+ * Check if a key exists in the cache.
  * @param {string} key - The cache key.
- * @returns {boolean} True if the key is cached, false otherwise.
+ * @returns {boolean} True if the key exists, false otherwise.
  */
-function isCached(key) {
-  return cache.has(key);
+function hasCache(key) {
+  return Object.prototype.hasOwnProperty.call(cache, key);
+}
+
+/**
+ * Get all cache keys.
+ * @returns {string[]} An array of cache keys.
+ */
+function getCacheKeys() {
+  return Object.keys(cache);
+}
+
+/**
+ * Remove a key from the cache.
+ * @param {string} key - The cache key.
+ */
+function removeCache(key) {
+  delete cache[key];
 }
 
 // Example usage:
-// Set a cache value with a 1-minute TTL
-// setCache('api/posts', [{ id: 1, title: 'Post 1' }], 60000);
+// Set a value in the cache with a TTL of 1 minute
+setCache('api/posts', [{ id: 1, title: 'Post 1' }], 60000);
 
-// Get a cache value
-// const cachedPosts = getCache('api/posts');
+// Get a value from the cache
+const cachedPosts = getCache('api/posts');
+if (cachedPosts) {
+  console.log(cachedPosts); // Output: [{ id: 1, title: 'Post 1' }]
+} else {
+  console.log('Cache not found or expired');
+}
 
 // Clear the cache
-// clearCache();
+clearCache();
 
-// Check if a key is cached
-// const isPostsCached = isCached('api/posts');
+// Check if a key exists in the cache
+if (hasCache('api/posts')) {
+  console.log('Key exists in cache');
+} else {
+  console.log('Key does not exist in cache');
+}
+
+// Get all cache keys
+const cacheKeys = getCacheKeys();
+console.log(cacheKeys); // Output: []
+
+// Remove a key from the cache
+removeCache('api/posts');
 
 // Export the cache utility functions
-export { setCache, getCache, clearCache, isCached };
-
-// Integrate with existing files
-// In src/pages/api/auth.js, use the cache utility to cache API responses
-// import { setCache, getCache } from '../utils/cache';
-// ...
-// const cachedResponse = getCache('api/auth');
-// if (cachedResponse) {
-//   return cachedResponse;
-// }
-// const response = await fetch('https://api.example.com/auth');
-// setCache('api/auth', response, 30000);
-// return response;
-
-// In src/features/Post.js, use the cache utility to cache post data
-// import { setCache, getCache } from '../utils/cache';
-// ...
-// const cachedPosts = getCache('api/posts');
-// if (cachedPosts) {
-//   return cachedPosts;
-// }
-// const posts = await fetch('https://api.example.com/posts');
-// setCache('api/posts', posts, 60000);
-// return posts;
+export { setCache, getCache, clearCache, hasCache, getCacheKeys, removeCache };
