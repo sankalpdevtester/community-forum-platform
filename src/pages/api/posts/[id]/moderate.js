@@ -2,57 +2,59 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { MongoClient } from 'mongodb';
 import { Post } from '../../models/Post';
 import { User } from '../../models/User';
-import { connectToDatabase } from '../../config/index';
+import { authenticate } from '../../pages/api/auth';
+
+const client = new MongoClient(process.env.MONGODB_URI);
 
 const moderatePost = async (req: NextApiRequest, res: NextApiResponse) => {
   const { id } = req.query;
-  const { userId, moderationType } = req.body;
+  const userId = authenticate(req);
 
-  if (!id || !userId || !moderationType) {
-    return res.status(400).json({ message: 'Invalid request' });
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const client = new MongoClient(connectToDatabase());
-  const db = client.db();
-  const postsCollection = db.collection('posts');
-  const usersCollection = db.collection('users');
+  const post = await Post.findById(id);
+  if (!post) {
+    return res.status(404).json({ error: 'Post not found' });
+  }
 
-  try {
-    const post = await postsCollection.findOne({ _id: id });
-    const user = await usersCollection.findOne({ _id: userId });
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
 
-    if (!post || !user) {
-      return res.status(404).json({ message: 'Post or user not found' });
+  if (!user.isAdmin) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  if (req.method === 'PATCH') {
+    const moderationAction = req.body.action;
+    if (moderationAction === 'approve') {
+      post.approved = true;
+    } else if (moderationAction === 'reject') {
+      post.approved = false;
+    } else if (moderationAction === 'delete') {
+      await post.remove();
+      return res.status(200).json({ message: 'Post deleted successfully' });
     }
 
-    if (moderationType === 'approve') {
-      await postsCollection.updateOne(
-        { _id: id },
-        { $set: { approved: true, moderatedBy: userId } }
-      );
-    } else if (moderationType === 'reject') {
-      await postsCollection.updateOne(
-        { _id: id },
-        { $set: { approved: false, moderatedBy: userId } }
-      );
-    } else {
-      return res.status(400).json({ message: 'Invalid moderation type' });
-    }
-
+    await post.save();
     return res.status(200).json({ message: 'Post moderated successfully' });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Internal server error' });
-  } finally {
-    client.close();
+  } else {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  switch (req.method) {
-    case 'POST':
-      return moderatePost(req, res);
-    default:
-      return res.status(405).json({ message: 'Method not allowed' });
-  }
+  await client.connect();
+  const db = client.db();
+  const postsCollection = db.collection('posts');
+  const usersCollection = db.collection('users');
+
+  Post.collection = postsCollection;
+  User.collection = usersCollection;
+
+  await moderatePost(req, res);
+  client.close();
 }
