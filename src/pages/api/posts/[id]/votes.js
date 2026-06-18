@@ -2,60 +2,60 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { MongoClient } from 'mongodb';
 import { Post } from '../../models/Post';
 import { User } from '../../models/User';
-import { connectToDatabase } from '../../config/index';
+import { authenticate } from '../../pages/api/auth';
+
+const client = new MongoClient(process.env.MONGODB_URI);
 
 const votePost = async (req: NextApiRequest, res: NextApiResponse) => {
   const { id } = req.query;
-  const { userId, voteType } = req.body;
+  const userId = authenticate(req);
 
-  if (!id || !userId || !voteType) {
-    return res.status(400).json({ message: 'Invalid request' });
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const client = new MongoClient(connectToDatabase());
-  const db = client.db();
-  const postsCollection = db.collection('posts');
-  const usersCollection = db.collection('users');
+  const post = await Post.findById(id);
+  if (!post) {
+    return res.status(404).json({ error: 'Post not found' });
+  }
 
-  try {
-    const post = await postsCollection.findOne({ _id: id });
-    const user = await usersCollection.findOne({ _id: userId });
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
 
-    if (!post || !user) {
-      return res.status(404).json({ message: 'Post or user not found' });
+  if (req.method === 'POST') {
+    const vote = req.body.vote;
+    if (vote === 'upvote') {
+      post.upvotes.push(userId);
+      post.downvotes = post.downvotes.filter((id) => id !== userId);
+    } else if (vote === 'downvote') {
+      post.downvotes.push(userId);
+      post.upvotes = post.upvotes.filter((id) => id !== userId);
     }
 
-    const existingVote = post.votes.find((vote) => vote.userId.toString() === userId);
-    if (existingVote) {
-      if (existingVote.voteType === voteType) {
-        return res.status(400).json({ message: 'You have already voted this way' });
-      } else {
-        await postsCollection.updateOne(
-          { _id: id },
-          { $pull: { votes: { userId: userId } } }
-        );
-      }
-    }
-
-    await postsCollection.updateOne(
-      { _id: id },
-      { $push: { votes: { userId: userId, voteType: voteType } } }
-    );
-
+    await post.save();
     return res.status(200).json({ message: 'Vote cast successfully' });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: 'Internal server error' });
-  } finally {
-    client.close();
+  } else if (req.method === 'DELETE') {
+    post.upvotes = post.upvotes.filter((id) => id !== userId);
+    post.downvotes = post.downvotes.filter((id) => id !== userId);
+
+    await post.save();
+    return res.status(200).json({ message: 'Vote removed successfully' });
+  } else {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  switch (req.method) {
-    case 'POST':
-      return votePost(req, res);
-    default:
-      return res.status(405).json({ message: 'Method not allowed' });
-  }
+  await client.connect();
+  const db = client.db();
+  const postsCollection = db.collection('posts');
+  const usersCollection = db.collection('users');
+
+  Post.collection = postsCollection;
+  User.collection = usersCollection;
+
+  await votePost(req, res);
+  client.close();
 }
