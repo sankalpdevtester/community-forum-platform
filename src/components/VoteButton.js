@@ -1,45 +1,58 @@
 import React, { useState, useEffect } from 'react';
-import { Post } from '../../models/Post';
-import { User } from '../../models/User';
+import { useRouter } from 'next/router';
 import axios from 'axios';
 
-interface VoteButtonProps {
-  postId: string;
-  userId: string;
-  voteType: string;
-}
-
-const VoteButton: React.FC<VoteButtonProps> = ({ postId, userId, voteType }) => {
-  const [voteCount, setVoteCount] = useState(0);
-  const [hasVoted, setHasVoted] = useState(false);
+const VoteButton = ({ postId, upvotes, downvotes }) => {
+  const [vote, setVote] = useState(null);
+  const [isUpvoted, setIsUpvoted] = useState(false);
+  const [isDownvoted, setIsDownvoted] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    const fetchVoteCount = async () => {
-      try {
-        const response = await axios.get(`/api/posts/${postId}/votes`);
-        const post = response.data;
-        const votes = post.votes.filter((vote) => vote.voteType === voteType);
-        setVoteCount(votes.length);
-        const existingVote = post.votes.find((vote) => vote.userId.toString() === userId);
-        if (existingVote && existingVote.voteType === voteType) {
-          setHasVoted(true);
+    const fetchVote = async () => {
+      const response = await axios.get(`/api/posts/${postId}/votes`);
+      if (response.data.vote) {
+        setVote(response.data.vote);
+        if (response.data.vote === 'upvote') {
+          setIsUpvoted(true);
+        } else if (response.data.vote === 'downvote') {
+          setIsDownvoted(true);
         }
-      } catch (error) {
-        console.error(error);
       }
     };
-    fetchVoteCount();
-  }, [postId, userId, voteType]);
+    fetchVote();
+  }, [postId]);
 
-  const handleVote = async () => {
+  const handleUpvote = async () => {
     try {
-      const response = await axios.post(`/api/posts/${postId}/votes`, {
-        userId,
-        voteType,
-      });
+      const response = await axios.post(`/api/posts/${postId}/votes`, { vote: 'upvote' });
       if (response.status === 200) {
-        setVoteCount(voteCount + 1);
-        setHasVoted(true);
+        setIsUpvoted(true);
+        setIsDownvoted(false);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleDownvote = async () => {
+    try {
+      const response = await axios.post(`/api/posts/${postId}/votes`, { vote: 'downvote' });
+      if (response.status === 200) {
+        setIsDownvoted(true);
+        setIsUpvoted(false);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleRemoveVote = async () => {
+    try {
+      const response = await axios.delete(`/api/posts/${postId}/votes`);
+      if (response.status === 200) {
+        setIsUpvoted(false);
+        setIsDownvoted(false);
       }
     } catch (error) {
       console.error(error);
@@ -47,14 +60,26 @@ const VoteButton: React.FC<VoteButtonProps> = ({ postId, userId, voteType }) => 
   };
 
   return (
-    <button
-      className={`bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded ${
-        hasVoted ? 'text-green-500' : 'text-gray-600'
-      }`}
-      onClick={handleVote}
-    >
-      {voteType === 'upvote' ? 'Upvote' : 'Downvote'} ({voteCount})
-    </button>
+    <div className="flex justify-center">
+      <button
+        className={`mr-2 ${isUpvoted ? 'text-green-500' : 'text-gray-500'}`}
+        onClick={isUpvoted ? handleRemoveVote : handleUpvote}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+        </svg>
+        <span className="ml-2">{upvotes}</span>
+      </button>
+      <button
+        className={`ml-2 ${isDownvoted ? 'text-red-500' : 'text-gray-500'}`}
+        onClick={isDownvoted ? handleRemoveVote : handleDownvote}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+        <span className="ml-2">{downvotes}</span>
+      </button>
+    </div>
   );
 };
 
