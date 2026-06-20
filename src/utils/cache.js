@@ -1,35 +1,33 @@
 /**
  * In-memory cache utility with TTL (time to live) for API responses.
- * This cache is used to store frequently accessed data to reduce the number of requests to the database.
+ * This utility helps reduce the number of requests made to the API by caching frequently accessed data.
  */
 
 const cache = {};
 
 /**
- * Set a value in the cache with a TTL.
- * @param {string} key - The key to store the value under.
- * @param {any} value - The value to store.
+ * Set a value in the cache with a TTL (time to live) in milliseconds.
+ * @param {string} key - The cache key.
+ * @param {any} value - The value to cache.
  * @param {number} ttl - The time to live in milliseconds.
  */
 function setCache(key, value, ttl) {
-  const currentTime = new Date().getTime();
-  cache[key] = { value, expiresAt: currentTime + ttl };
+  const now = Date.now();
+  cache[key] = { value, expires: now + ttl };
 }
 
 /**
  * Get a value from the cache.
- * @param {string} key - The key to retrieve the value for.
- * @returns {any} The cached value, or undefined if it does not exist or has expired.
+ * @param {string} key - The cache key.
+ * @returns {any} The cached value or null if not found or expired.
  */
 function getCache(key) {
-  if (!cache[key]) return undefined;
-  const { value, expiresAt } = cache[key];
-  const currentTime = new Date().getTime();
-  if (currentTime > expiresAt) {
-    delete cache[key];
-    return undefined;
+  const now = Date.now();
+  if (cache[key] && cache[key].expires > now) {
+    return cache[key].value;
   }
-  return value;
+  delete cache[key];
+  return null;
 }
 
 /**
@@ -40,67 +38,52 @@ function clearCache() {
 }
 
 /**
- * Check if a key exists in the cache.
- * @param {string} key - The key to check.
- * @returns {boolean} True if the key exists, false otherwise.
+ * Check if a value is cached.
+ * @param {string} key - The cache key.
+ * @returns {boolean} True if the value is cached, false otherwise.
  */
-function hasCache(key) {
-  return !!cache[key];
-}
-
-/**
- * Get all keys in the cache.
- * @returns {string[]} An array of keys in the cache.
- */
-function getCacheKeys() {
-  return Object.keys(cache);
+function isCached(key) {
+  const now = Date.now();
+  return cache[key] && cache[key].expires > now;
 }
 
 // Example usage:
-// Set a value in the cache with a TTL of 1 minute
-setCache('apiResponse', { data: 'example data' }, 60000);
+// Cache a post for 1 hour (3600000 ms)
+// setCache('post:123', { id: 123, title: 'Example Post' }, 3600000);
 
-// Get the value from the cache
-const cachedValue = getCache('apiResponse');
-console.log(cachedValue); // { data: 'example data' }
+// Get a cached post
+// const cachedPost = getCache('post:123');
 
 // Clear the cache
-clearCache();
+// clearCache();
 
-// Check if a key exists in the cache
-const hasKey = hasCache('apiResponse');
-console.log(hasKey); // false
+// Check if a post is cached
+// const isPostCached = isCached('post:123');
 
-// Get all keys in the cache
-const keys = getCacheKeys();
-console.log(keys); // []
+// Export the cache utility functions
+export { setCache, getCache, clearCache, isCached };
 
 // Integrate with existing files
-// In src/pages/api/auth.js
-import { getCache } from '../utils/cache';
-import { NextApiRequest, NextApiResponse } from 'next';
+// In src/pages/api/posts/[id]/votes.js
+import { setCache, getCache } from '../../utils/cache';
 
-const authenticate = async (req: NextApiRequest, res: NextApiResponse) => {
-  const cachedResponse = getCache('authResponse');
-  if (cachedResponse) {
-    return res.json(cachedResponse);
-  }
-  // If not cached, authenticate and cache the response
-  const response = await authenticateUser(req);
-  setCache('authResponse', response, 30000); // Cache for 30 seconds
-  return res.json(response);
-};
+// Cache the votes for a post
+const cacheKey = `post:${id}:votes`;
+const cachedVotes = getCache(cacheKey);
+if (!cachedVotes) {
+  const votes = await getVotesFromDatabase(id);
+  setCache(cacheKey, votes, 3600000); // Cache for 1 hour
+  return votes;
+}
+return cachedVotes;
 
-// In src/features/Post.js
-import { getCache } from '../utils/cache';
+// In src/pages/PostPage.js
+import { isCached } from '../../utils/cache';
 
-const getPost = async (postId) => {
-  const cachedPost = getCache(`post_${postId}`);
-  if (cachedPost) {
-    return cachedPost;
-  }
-  // If not cached, fetch the post and cache it
-  const post = await fetchPostFromDatabase(postId);
-  setCache(`post_${postId}`, post, 60000); // Cache for 1 minute
-  return post;
-};
+// Check if the post is cached before making a request
+const cacheKey = `post:${id}`;
+if (isCached(cacheKey)) {
+  // Use the cached post
+} else {
+  // Make a request to the API to fetch the post
+}
