@@ -1,6 +1,6 @@
 /**
  * In-memory cache utility with TTL (time to live) for API responses.
- * This module provides a simple caching mechanism to reduce the number of API requests.
+ * This module provides a simple caching mechanism to reduce the number of requests to the API.
  */
 
 const cache = new Map();
@@ -12,25 +12,23 @@ const cache = new Map();
  * @param {number} ttl - The time to live in milliseconds.
  */
 function setCache(key, value, ttl) {
-  const currentTime = Date.now();
-  const expirationTime = currentTime + ttl;
-  cache.set(key, { value, expirationTime });
+  const expiration = Date.now() + ttl;
+  cache.set(key, { value, expiration });
 }
 
 /**
  * Get a value from the cache.
  * @param {string} key - The cache key.
- * @returns {any} The cached value or null if not found or expired.
+ * @returns {any} The cached value or undefined if not found or expired.
  */
 function getCache(key) {
-  const cachedValue = cache.get(key);
-  if (!cachedValue) return null;
-  const currentTime = Date.now();
-  if (currentTime > cachedValue.expirationTime) {
+  const cached = cache.get(key);
+  if (!cached) return undefined;
+  if (cached.expiration < Date.now()) {
     cache.delete(key);
-    return null;
+    return undefined;
   }
-  return cachedValue.value;
+  return cached.value;
 }
 
 /**
@@ -41,24 +39,39 @@ function clearCache() {
 }
 
 /**
- * Cache API responses for a specified amount of time.
- * @param {string} url - The API URL.
- * @param {object} options - The API request options.
- * @param {number} ttl - The time to live in milliseconds.
- * @returns {Promise<any>} The cached or fetched API response.
+ * Check if a key is cached.
+ * @param {string} key - The cache key.
+ * @returns {boolean} True if the key is cached, false otherwise.
  */
-async function cacheApiResponse(url, options, ttl) {
-  const cacheKey = `${url}_${JSON.stringify(options)}`;
-  const cachedResponse = getCache(cacheKey);
-  if (cachedResponse) return cachedResponse;
-  const response = await fetch(url, options);
-  const data = await response.json();
-  setCache(cacheKey, data, ttl);
-  return data;
+function isCached(key) {
+  return cache.has(key);
 }
 
 // Example usage:
-// cacheApiResponse('/api/posts', { method: 'GET' }, 60000) // cache for 1 minute
+// Set a value in the cache with a TTL of 1 minute (60000 ms)
+// setCache('api/posts', [{ id: 1, title: 'Post 1' }], 60000);
+
+// Get a value from the cache
+// const cachedPosts = getCache('api/posts');
+
+// Clear the cache
+// clearCache();
+
+// Check if a key is cached
+// const isPostsCached = isCached('api/posts');
 
 // Export the cache utility functions
-export { setCache, getCache, clearCache, cacheApiResponse };
+export { setCache, getCache, clearCache, isCached };
+
+// Integrate with existing API endpoint files
+// For example, in src/pages/api/posts/[id]/votes.js:
+// import { getCache, setCache } from '../../utils/cache';
+
+// const cachedVotes = getCache(`votes/${id}`);
+// if (cachedVotes) {
+//   return cachedVotes;
+// }
+
+// const votes = await getVotesFromDatabase(id);
+// setCache(`votes/${id}`, votes, 30000); // Cache for 30 seconds
+// return votes;
